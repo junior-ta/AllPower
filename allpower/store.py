@@ -2,9 +2,16 @@ from __future__ import annotations
 import json, sqlite3, time, uuid
 from pathlib import Path
 
+class ManagedConnection(sqlite3.Connection):
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            return super().__exit__(exc_type, exc, tb)
+        finally:
+            self.close()
+
 def connect(path):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(path, timeout=15)
+    db = sqlite3.connect(path, timeout=15, factory=ManagedConnection)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA busy_timeout=15000")
@@ -35,6 +42,9 @@ def claim(path, lease_seconds=30):
     try:
         db.execute("BEGIN IMMEDIATE")
         now = time.time()
+        db.execute("""UPDATE jobs SET status='failed', lease_until=NULL,
+          error=COALESCE(error,'Worker lease expired after retry limit'), updated_at=?
+          WHERE status='running' AND lease_until < ? AND attempts >= 3""", (now,now))
         row = db.execute("""SELECT * FROM jobs WHERE (status='queued' OR
           (status='running' AND lease_until < ?)) AND attempts < 3
           ORDER BY created_at LIMIT 1""", (now,)).fetchone()

@@ -30,5 +30,12 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(run['status'],'done')
             self.assertTrue(store.acknowledge(path,'adv-'+j))
             self.assertEqual(store.get_run(path,j)['advisory']['status'],'acknowledged')
+    def test_expired_final_lease_becomes_failed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=str(Path(tmp)/'test.db');j=store.enqueue(path,'storm')
+            with store.connect(path) as db:
+                db.execute("UPDATE jobs SET status='running',attempts=3,lease_until=0 WHERE id=?",(j,))
+            self.assertIsNone(store.claim(path))
+            self.assertEqual(store.get_run(path,j)['status'],'failed')
 
 if __name__=='__main__':unittest.main()

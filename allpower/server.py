@@ -28,9 +28,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.json({"error":"unauthorized"}, 401)
         if path == "/api/status":
             model_file = ROOT / 'artifacts' / 'demand' / 'evaluation.json'
+            synthetic_file = ROOT / 'artifacts' / 'synthetic_demand_ridge.json'
             demand_source = os.getenv('ALLPOWER_DEMAND_CSV')
             return self.json({"runtime_arch": os.uname().machine,
-                              "model_version":"evaluated demand candidates available" if model_file.exists() else "seasonal-benchmark-v1",
+                              "model_version":"evaluated demand candidates available" if demand_source and model_file.exists() else ("synthetic-ridge-v1" if synthetic_file.exists() and not demand_source else "seasonal-benchmark-v1"),
                               "data_freshness":"user supplied CSV" if demand_source else "bundled scenario",
                               "mode":"real demand plus simulated supply" if demand_source else "simulated demo",
                               **store.status(self.server.db_path)})

@@ -4,9 +4,11 @@ AllPower is a research prototype for a six-hour hospital energy-preparedness wor
 
 ## What is ready
 
-The local demo runs with Python 3.9+ standard library. With SciPy present, the worker solves a linear program; without it, it uses a clearly named prepared dispatch heuristic. Both are compared with a reactive policy. The demand model in the shipped replay is a weekly seasonal benchmark. A training script and notebook evaluate six direct ML candidates after an official hourly demand CSV is supplied. The image-training script requires a licensed, correctly split dataset and is not connected to the shipped replay.
+The local demo runs with Python 3.9+ standard library. With SciPy present, the worker solves a linear program; without it, it uses a clearly named prepared dispatch heuristic. Both are compared with a reactive policy. The shipped demand model is a six-horizon ridge regression fitted to the **simulated** series; it selected against a weekly baseline on a chronological validation window. The saved test evaluation measures synthetic-series fit only. A separate script trains six direct XGBoost or scikit-learn candidates after an official hourly demand CSV is supplied. The image-training script requires a licensed, correctly split dataset and is not connected to the scripted finding.
 
 The simulated hospital is Bayou Regional Hospital in southeast Texas. Its location, loads, backup resources, asset link, and all current demand and supply values are fictional. The normal, supply-loss, and storm cases are deterministic. The storm case is a generic stress test, not a historical replay.
+
+Rebuild the shipped synthetic model with `PYTHONPATH=. python3 scripts/train_synthetic.py`. This requires NumPy and writes `artifacts/synthetic_demand_ridge.json`. The runtime can read its JSON weights using standard Python. Synthetic test MAE spans 513–641 MW across the six horizons; this **does not estimate real ERCOT performance**.
 
 ## Run locally
 

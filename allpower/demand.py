@@ -16,6 +16,23 @@ def load_history():
 
 def predict(history):
     baseline=forecast(history)
+    if not os.getenv('ALLPOWER_DEMAND_CSV'):
+        synthetic=Path('artifacts/synthetic_demand_ridge.json')
+        if synthetic.exists():
+            from scripts.train_demand import features
+            from datetime import datetime
+            artifact=json.loads(synthetic.read_text())
+            rows=[(datetime.fromisoformat(r['timestamp']),r['demand_mw']) for r in history]
+            values=features(rows,len(rows)-1)
+            standardized=[(v-m)/s for v,m,s in zip(values,artifact['feature_mean'],artifact['feature_std'])]
+            result=[]
+            for h in range(1,7):
+                if artifact['selection'][str(h)]=='ridge':
+                    w=artifact['weights'][str(h)]
+                    value=w['y_mean']+w['y_std']*(w['beta'][0]+sum(b*x for b,x in zip(w['beta'][1:],standardized)))
+                    result.append(round(value,1))
+                else:result.append(baseline[h-1])
+            return result,artifact['version']
     directory=Path(os.getenv('ALLPOWER_MODEL_DIR','artifacts/demand'))
     report_file=directory/'evaluation.json'
     if not report_file.exists(): return baseline,'seasonal-benchmark-v1'

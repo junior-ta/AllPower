@@ -1,0 +1,32 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${ALLPOWER_BASE_IMAGE:-registry.linuxone.cloud.marist.edu/l1cc/jupyterlab-image-s390x:latest}
+    image: allpower:local
+    entrypoint: ["python3"]
+    command: ["-m", "allpower.server", "--host", "0.0.0.0"]
+    environment:
+      ALLPOWER_DB: /opt/allpower/data/allpower.sqlite3
+      ALLPOWER_TOKEN: ${ALLPOWER_TOKEN:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/opt/allpower/data
+      - ./artifacts:/opt/allpower/artifacts:ro
+    restart: unless-stopped
+  worker:
+    image: allpower:local
+    entrypoint: ["python3"]
+    command: ["-m", "allpower.worker"]
+    environment:
+      ALLPOWER_DB: /opt/allpower/data/allpower.sqlite3
+      ALLPOWER_DEMAND_CSV: ${ALLPOWER_DEMAND_CSV:-}
+      ALLPOWER_DEMAND_PROVENANCE: ${ALLPOWER_DEMAND_PROVENANCE:-}
+    volumes:
+      - ./data:/opt/allpower/data
+      - ./artifacts:/opt/allpower/artifacts:ro
+    depends_on:
+      - web
+    restart: unless-stopped

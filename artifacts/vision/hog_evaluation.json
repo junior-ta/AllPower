@@ -1,0 +1,43 @@
+{
+  "dataset": {
+    "dataset": "InsPLAD glass-insulator demo subset",
+    "source_url": "https://data.mendeley.com/datasets/5n3fjgvfyz/1",
+    "license": "CC BY-NC 3.0",
+    "attribution": "Vieira-e-Silva et al., InsPLAD, 2023, DOI 10.17632/5n3fjgvfyz.1",
+    "counts": {
+      "train": {
+        "normal": 547,
+        "defect": 50
+      },
+      "val": {
+        "normal": 143,
+        "defect": 9
+      },
+      "test": {
+        "normal": 29,
+        "defect": 30
+      }
+    },
+    "augmented_files_excluded": 621,
+    "original_training_records_excluded_for_test_overlap": 11,
+    "seed": 19,
+    "split_policy": "Publisher val reserved as test; remove training source-photo/pixel overlaps with test; split remaining train by source-photo ID into train/val; remove pixel overlap with val. Exclude augmentation-suffixed files.",
+    "image_processing": "RGB PNG resized to 96x96 for small demo upload",
+    "group_definition": "Filename date and DJI image identifier before _cadeia_isolador_vidro_",
+    "limitations": "Source-photo IDs checked; independence of adjacent flight frames, physical assets and capture sessions is not verified. Small demo, not deployment accuracy. Publisher val is repurposed as held-out test; not the original benchmark protocol."
+  },
+  "hog_logistic": {
+    "balanced_accuracy": 0.6982758620689655,
+    "defect_recall": 0.5,
+    "confusion_matrix": [
+      [
+        26,
+        3
+      ],
+      [
+        15,
+        15
+      ]
+    ]
+  }
+}

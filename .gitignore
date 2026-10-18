@@ -2,8 +2,4 @@ __pycache__/
 *.pyc
 .env
 data/*.sqlite3*
-data/raw/
-data/vision/
-artifacts/demand/
-artifacts/vision/
 .ipynb_checkpoints/

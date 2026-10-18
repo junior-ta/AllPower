@@ -10,6 +10,13 @@ services:
     environment:
       ALLPOWER_DB: /opt/allpower/data/allpower.sqlite3
       ALLPOWER_TOKEN: ${ALLPOWER_TOKEN:-}
+      ALLPOWER_HOSPITAL_TOKEN: ${ALLPOWER_HOSPITAL_TOKEN:-}
+      ALLPOWER_SUPPLIER_TOKEN: ${ALLPOWER_SUPPLIER_TOKEN:-}
+      ALLPOWER_ADVICE_PROVIDER: ${ALLPOWER_ADVICE_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      ALLPOWER_LLAMA_URL: ${ALLPOWER_LLAMA_URL:-}
+      ALLPOWER_LLAMA_MODEL: ${ALLPOWER_LLAMA_MODEL:-granite}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

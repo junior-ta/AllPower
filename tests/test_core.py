@@ -1,14 +1,30 @@
-import tempfile, unittest
+import json, os, tempfile, unittest
 from pathlib import Path
-from allpower.scenarios import scenario_output, forecast
+from unittest.mock import patch
+from allpower.scenarios import scenario_output, forecast, demand_history
 from allpower.backup import plan
-from allpower import store
+from allpower import store, demand
 
 class CoreTests(unittest.TestCase):
     def test_forecast_uses_prior_matching_hours(self):
         rows=[{'demand_mw':float(i)} for i in range(200)]
         expected=.62*32+.28*176+.10*199
         self.assertAlmostEqual(forecast(rows,1)[0],round(expected,1))
+    def test_shipped_synthetic_model_is_loaded_without_training(self):
+        with patch.dict(os.environ, {'ALLPOWER_DEMAND_CSV':''}):
+            values, version=demand.predict(demand_history())
+        self.assertEqual(version,'synthetic-ridge-v1')
+        self.assertEqual(len(values),6)
+    def test_selected_weekly_baseline_matches_evaluation_method(self):
+        rows=demand_history()
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp,'evaluation.json').write_text(json.dumps({
+                'selected_on_validation':{str(i):'weekly_baseline' for i in range(1,7)},
+                'model':'test'}))
+            with patch.dict(os.environ, {'ALLPOWER_DEMAND_CSV':'provided.csv','ALLPOWER_MODEL_DIR':tmp}):
+                values, version=demand.predict(rows)
+        self.assertEqual(version,'test-mixed-v1')
+        self.assertEqual(values,[float(rows[-169+h]['demand_mw']) for h in range(1,7)])
     def test_normal_and_supply_loss(self):
         normal=scenario_output('normal'); loss=scenario_output('supply-loss')
         self.assertIsNone(normal['first_deficit_hour'])

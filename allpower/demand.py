@@ -17,7 +17,7 @@ def load_history():
 def predict(history):
     baseline=forecast(history)
     if not os.getenv('ALLPOWER_DEMAND_CSV'):
-        synthetic=Path('artifacts/synthetic_demand_ridge.json')
+        synthetic=Path('artifacts/demand_ridge.json')
         if synthetic.exists():
             from scripts.train_demand import features
             from datetime import datetime
@@ -31,7 +31,7 @@ def predict(history):
                     w=artifact['weights'][str(h)]
                     value=w['y_mean']+w['y_std']*(w['beta'][0]+sum(b*x for b,x in zip(w['beta'][1:],standardized)))
                     result.append(round(value,1))
-                else:result.append(baseline[h-1])
+                else:result.append(float(history[-169+h]['demand_mw']))
             return result,artifact['version']
     directory=Path(os.getenv('ALLPOWER_MODEL_DIR','artifacts/demand'))
     report_file=directory/'evaluation.json'
@@ -51,7 +51,7 @@ def predict(history):
             if selected[str(h)]=='candidate':
                 with open(directory/f'h{h}.pkl','rb') as f: model=pickle.load(f)
                 result.append(round(float(model.predict(x)[0]),1))
-            else: result.append(baseline[h-1])
+            else: result.append(float(history[-169+h]['demand_mw']))
         return result,report['model']+'-mixed-v1'
-    except Exception:
-        return baseline,'seasonal-benchmark-v1'
+    except Exception as exc:
+        return baseline,'seasonal-benchmark-v1 (saved model unavailable: '+type(exc).__name__+')'

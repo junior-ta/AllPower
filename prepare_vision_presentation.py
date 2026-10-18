@@ -89,14 +89,20 @@ def main():
         print(label,result)
     (out/'example_predictions.json').write_text(json.dumps(records,indent=2))
     # These are new, dedicated demo assets; existing dashboard files stay untouched.
-    Path('web/vision-demo.html').write_text(PAGE)
+    # Keep the current supplier portal entry point; this script only refreshes evidence.
+    if not Path('web/vision-demo.html').exists():
+        Path('web/vision-demo.html').write_text(
+            '<!doctype html><html lang="en"><meta charset="utf-8">'
+            '<meta http-equiv="refresh" content="0;url=/supplier.html#inspection">'
+            '<title>AllPower inspection</title><a href="/supplier.html#inspection">'
+            'Open supplier inspection</a></html>')
     Path('web/vision-demo-metrics.json').write_text(json.dumps({'test_count':report['counts']['test'],**metrics},indent=2))
     with zipfile.ZipFile(out/'pitch_and_upload_images.zip','w',zipfile.ZIP_DEFLATED) as z:
         for name in ('pitch_normal.png','pitch_defect.png','example_predictions.json'):
             z.write(out/name,name)
         for path in sorted(examples.glob('*.png')):z.write(path,'upload_examples/'+path.name)
     print('\nREADY: download artifacts/vision_demo/pitch_and_upload_images.zip')
-    print('Website page created: web/vision-demo.html')
+    print('Supplier inspection page preserved: web/vision-demo.html')
     print('Rebuild and recreate the web container to serve the new page. No retraining needed.')
 
 

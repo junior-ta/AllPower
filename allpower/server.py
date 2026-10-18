@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, json, mimetypes, os, re
+import argparse, hmac, json, mimetypes, os, platform, re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -8,6 +8,14 @@ from .scenarios import SCENARIOS
 
 ROOT = Path(__file__).resolve().parent.parent
 MAX_BODY = 2_000_000
+FACILITIES = [
+    {"id":"insulator-01","name":"Bayou line · glass insulator","location":"Houston area",
+     "state":"Functional","confidence":0.94,"inspected_at":"Illustrative record","live_demo":True},
+    {"id":"substation-02","name":"Gulf Coast substation","location":"Galveston area",
+     "state":"Not functional","confidence":0.87,"inspected_at":"Illustrative record","live_demo":False},
+    {"id":"feeder-03","name":"Brazos distribution feeder","location":"Brazoria area",
+     "state":"Functional","confidence":0.91,"inspected_at":"Illustrative record","live_demo":False},
+]
 
 class Handler(BaseHTTPRequestHandler):
     def json(self, data, status=200):
@@ -18,23 +26,49 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers(); self.wfile.write(payload)
 
-    def authorized(self):
-        token = os.getenv("ALLPOWER_TOKEN", "")
-        return not token or self.headers.get("X-AllPower-Token") == token
+    def authorized(self, scope=None):
+        provided = self.headers.get("X-AllPower-Token", "")
+        master = os.getenv("ALLPOWER_TOKEN", "")
+        hospital = os.getenv("ALLPOWER_HOSPITAL_TOKEN", "")
+        supplier = os.getenv("ALLPOWER_SUPPLIER_TOKEN", "")
+        if not any((master, hospital, supplier)): return True
+        if master and hmac.compare_digest(provided, master): return True
+        if scope == "hospital":
+            return bool(hospital and hmac.compare_digest(provided, hospital))
+        if scope == "supplier":
+            return bool(supplier and hmac.compare_digest(provided, supplier))
+        return bool((hospital and hmac.compare_digest(provided, hospital)) or
+                    (supplier and hmac.compare_digest(provided, supplier)))
+
+    def access_error(self, scope=None):
+        return self.json({"error":"Access token required or invalid for this portal"}, 401)
 
     def do_GET(self):
         path = urlparse(self.path).path
-        if path.startswith("/api/") and not self.authorized():
-            return self.json({"error":"unauthorized"}, 401)
+        scope = "hospital" if path.startswith("/api/hospital/") else ("supplier" if path.startswith("/api/supplier/") or path == "/api/inspection" else None)
+        if path.startswith("/api/") and not self.authorized(scope):
+            return self.access_error(scope)
         if path == "/api/status":
-            model_file = ROOT / 'artifacts' / 'demand' / 'evaluation.json'
-            synthetic_file = ROOT / 'artifacts' / 'synthetic_demand_ridge.json'
-            demand_source = os.getenv('ALLPOWER_DEMAND_CSV')
-            return self.json({"runtime_arch": os.uname().machine,
-                              "model_version":"evaluated demand candidates available" if demand_source and model_file.exists() else ("synthetic-ridge-v1" if synthetic_file.exists() and not demand_source else "seasonal-benchmark-v1"),
-                              "data_freshness":"user supplied CSV" if demand_source else "bundled scenario",
-                              "mode":"real demand plus simulated supply" if demand_source else "simulated demo",
+            latest = store.latest_run(self.server.db_path)
+            record = latest.get('result', {}) if latest else {}
+            return self.json({"runtime_arch": platform.machine(),
+                              "model_version": record.get('model_version', 'No completed run'),
+                              "data_freshness": record.get('input_timestamp'),
+                              "mode": record.get('provenance', {}).get('demand_history', 'No completed run'),
                               **store.status(self.server.db_path)})
+        if path == "/api/runs/latest":
+            return self.json(store.latest_run(self.server.db_path))
+        if path == "/api/runs":
+            return self.json({"runs": store.list_runs(self.server.db_path)})
+        if path == "/api/hospital/acknowledgments":
+            return self.json({"acknowledgments": store.acknowledgments(self.server.db_path)})
+        if path == "/api/supplier/facilities":
+            return self.json({"facilities": FACILITIES})
+        match = re.fullmatch(r"/api/hospital/runs/([0-9a-f-]{36})/advice", path)
+        if match:
+            run = store.get_run(self.server.db_path, match.group(1))
+            if not run or run["status"] != "done": return self.json({"error":"completed run not found"},404)
+            return self.json({"messages": store.advice_history(self.server.db_path, run["id"])})
         if path == "/api/scenarios":
             return self.json({"scenarios":[{"id": k, **v, "provenance":"simulated"} for k,v in SCENARIOS.items()]})
         match = re.fullmatch(r"/api/runs/([0-9a-f-]{36})", path)
@@ -53,7 +87,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        if not self.authorized(): return self.json({"error":"unauthorized"}, 401)
+        scope = "hospital" if path.startswith("/api/hospital/") else ("supplier" if path == "/api/inspection" else None)
+        if not self.authorized(scope): return self.access_error(scope)
         size = int(self.headers.get("Content-Length", "0"))
         if size > MAX_BODY: return self.json({"error":"request too large"}, 413)
         body = self.rfile.read(size) if size else b''
@@ -65,8 +100,32 @@ class Handler(BaseHTTPRequestHandler):
             return self.json({"run_id":job_id,"status":"queued"}, 202)
         match = re.fullmatch(r"/api/advisories/(adv-[0-9a-f-]{36})/acknowledge", path)
         if match:
+            if not self.authorized("hospital"): return self.access_error("hospital")
             found = store.acknowledge(self.server.db_path, match.group(1))
-            return self.json({"status":"acknowledged"} if found else {"error":"unknown advisory"}, 200 if found else 404)
+            return self.json(found if found else {"error":"unknown advisory"}, 200 if found else 404)
+        if path == "/api/hospital/advice":
+            if size > 8_000: return self.json({"error":"question too long"},413)
+            try: request = json.loads(body)
+            except (ValueError, UnicodeDecodeError): return self.json({"error":"invalid JSON"},400)
+            if not isinstance(request, dict): return self.json({"error":"invalid request"},400)
+            run_id = request.get("run_id")
+            question = request.get("question", "")
+            if not isinstance(run_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", run_id):
+                return self.json({"error":"invalid run ID"},400)
+            if not isinstance(question, str) or len(question) > 500:
+                return self.json({"error":"question must be under 500 characters"},400)
+            run = store.get_run(self.server.db_path, run_id)
+            if not run or run["status"] != "done": return self.json({"error":"completed run not found"},404)
+            from . import advice
+            history = store.advice_history(self.server.db_path, run_id)
+            if not question.strip() and any(x['role']=='assistant' for x in history):
+                last = next(x for x in reversed(history) if x['role']=='assistant')
+                return self.json({"answer":last['content'],"provider":last['provider'],
+                                  "fallback":last['provider']==advice.CHECKLIST_VERSION,"cached":True})
+            if len(history) >= 30: return self.json({"error":"Conversation limit reached for this run"},429)
+            result = advice.generate(run, question.strip(), history)
+            store.save_advice(self.server.db_path, run_id, question.strip(),result['answer'],result['provider'])
+            return self.json(result)
         if path == "/api/inspection":
             if self.headers.get('Content-Type','').split(';')[0] not in ('image/jpeg','image/png'):
                 return self.json({'error':'Only JPEG or PNG is accepted'},415)
@@ -75,6 +134,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(classify(body))
             except FileNotFoundError:
                 return self.json({"error":"Image model unavailable. Scenario inspection is simulated and labelled as such."}, 503)
+            except ImportError:
+                return self.json({"error":"Image inference dependencies are unavailable on this web host."}, 503)
             except ValueError as exc:
                 return self.json({'error':str(exc)},400)
         return self.json({"error":"not found"}, 404)

@@ -1,23 +1,24 @@
-# Five-minute demonstration
+# AllPower portal demo runbook
 
-1. Show `uname -m` and `docker compose ps` on LinuxONE. Say which capabilities are measured there.
-2. Open the website through the SSH tunnel. The banner says **Simulated demo**. Show normal operation first: no urgent advisory.
-3. Select **Supply loss** and run. Point to forecast demand, assumed supply after reserve, first tight-margin hour, and the hospital advisory.
-4. Point to prepared versus reactive modeled critical energy. Explain that the comparison depends on fictional battery, generator, solar and startup assumptions. Acknowledge the advisory, refresh, and show persistence.
-5. Switch to Inspection. Explain that the displayed concern is a scenario finding and the image model requires a licensed training subset. Do not call it a live classifier.
-6. Stop the worker, queue a new run, restart the worker, and watch completion. This proves durable recovery on one host.
-7. Close on Evidence: current runtime architecture and clear real/simulated/production-design boundaries.
+## Before the audience arrives
 
-## Evidence to capture on the actual VM
+1. On LinuxONE, confirm the intended Git commit, `uname -m`, `docker compose ps`, mounted demand/model files, and web/worker logs. Keep the private `.env` and token out of recordings.
+2. Back up the SQLite database before any first deployment of the updated code. Check that `./data` and `./artifacts` remain mounted.
+3. Open the site through the Windows SSH tunnel. Use the inline token field to connect. Check both portals and the supplier example image. Confirm the preparation assistant either generates through the configured provider or presents the prepared checklist.
+4. Confirm the displayed demand source, model version, and forecast origin match the actual saved run. Historical inputs are not current predictions.
 
-- Lab-completion records from the event platform.
-- `uname -m`, image digest, Docker and package versions.
-- Running web and worker containers; browser and backend on the VM.
-- A full run with result ID, advisory and acknowledgment after restart.
-- Queued job while worker stopped and completed job after restart.
-- Model evaluation JSON only after a real dataset has been trained there.
-- Access via SSH tunnel and loopback binding; do not show the token.
+## Suggested click sequence
 
-## Presentation fallback
+1. Open the **Hospital portal**. Show the operational overview, six-hour horizon, real southeast Texas map, and clearly fictional hospital marker.
+2. Scroll to **Demo simulation** and run **Supply loss**. Return to the top to show the regional margin, hospital backup coverage, and preparation alert. Regional tight margin is not a confirmed local outage.
+3. Show the automatically opened preparation briefing. Open the full assistant view, ask a question about generator/battery checks, and point out that forecast numbers come from the saved AllPower record. If the provider is unavailable, show the labeled prepared checklist.
+4. Acknowledge the advisory. Refresh and show the same timestamp in the advisory and **Previous acknowledgments** list.
+5. Switch to **Power supplier**. Show the same saved run and total ERCOT demand versus assumed supply.
+6. Open **Facility inspection**. Describe the table as illustrative. Use **View in real time** on the first glass-insulator row to run a new model request on its demo image. Other rows have no connected feed.
+7. Scroll to the inspection simulation and upload a licensed PNG/JPEG crop. Explain that the result concerns a missing-cap defect on an insulator. It does not establish entire-facility operability.
 
-If the live VM is unavailable, run both Python processes locally and state that the fallback is local. The dashboard still shows the deterministic scenarios, but do not claim that fallback as LinuxONE evidence. Keep screenshots of the actual VM run separately.
+## Recovery proof
+
+Stop only the worker. Show that the saved forecast, acknowledgment, and advice remain readable. Queue a new scenario and refresh the portal; the pending job should remain visible. Restart the worker and show that the same job finishes. Restart the web container and verify acknowledgment history still loads from the persistent database.
+
+If LinuxONE is unavailable, use the local Python web server and worker as a clearly labeled fallback. Do not present a local fallback as a LinuxONE runtime demonstration.

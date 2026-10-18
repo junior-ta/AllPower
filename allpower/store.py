@@ -27,6 +27,11 @@ def connect(path):
       id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
       acknowledged_at REAL, FOREIGN KEY(run_id) REFERENCES runs(id));
     CREATE TABLE IF NOT EXISTS heartbeat (worker_id TEXT PRIMARY KEY, at REAL NOT NULL);
+    CREATE TABLE IF NOT EXISTS advice_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
+      role TEXT NOT NULL, content TEXT NOT NULL, provider TEXT NOT NULL,
+      created_at REAL NOT NULL, FOREIGN KEY(run_id) REFERENCES runs(id));
+    CREATE INDEX IF NOT EXISTS advice_by_run ON advice_messages(run_id,id);
     """)
     return db
 
@@ -88,7 +93,42 @@ def acknowledge(path, advisory_id):
     with connect(path) as db:
         cur = db.execute("UPDATE advisories SET status='acknowledged', acknowledged_at=COALESCE(acknowledged_at,?) WHERE id=?",
                          (time.time(), advisory_id))
-        return cur.rowcount > 0
+        if not cur.rowcount: return None
+        row = db.execute("SELECT id,status,acknowledged_at,run_id FROM advisories WHERE id=?", (advisory_id,)).fetchone()
+        return dict(row)
+
+def list_runs(path, limit=20, before=None):
+    with connect(path) as db:
+        sql = "SELECT id,scenario,status,created_at,updated_at,error FROM jobs"
+        params = []
+        if before is not None:
+            sql += " WHERE created_at < ?"; params.append(before)
+        sql += " ORDER BY created_at DESC,id DESC LIMIT ?"; params.append(limit)
+        return [dict(row) for row in db.execute(sql, params)]
+
+def latest_run(path):
+    with connect(path) as db:
+        row = db.execute("SELECT id FROM runs ORDER BY created_at DESC,id DESC LIMIT 1").fetchone()
+    return get_run(path, row['id']) if row else None
+
+def acknowledgments(path, limit=20):
+    with connect(path) as db:
+        rows = db.execute("""SELECT a.id,a.run_id,a.status,a.acknowledged_at,
+          r.scenario,r.created_at FROM advisories a JOIN runs r ON r.id=a.run_id
+          WHERE a.status='acknowledged' ORDER BY a.acknowledged_at DESC LIMIT ?""", (limit,))
+        return [dict(row) for row in rows]
+
+def advice_history(path, run_id):
+    with connect(path) as db:
+        rows = db.execute("SELECT id,role,content,provider,created_at FROM advice_messages WHERE run_id=? ORDER BY id", (run_id,))
+        return [dict(row) for row in rows]
+
+def save_advice(path, run_id, question, answer, provider):
+    with connect(path) as db:
+        now=time.time()
+        if question:
+            db.execute("INSERT INTO advice_messages(run_id,role,content,provider,created_at) VALUES(?,'user',?,'user',?)", (run_id,question,now))
+        db.execute("INSERT INTO advice_messages(run_id,role,content,provider,created_at) VALUES(?,'assistant',?,?,?)", (run_id,answer,provider,now))
 
 def status(path):
     with connect(path) as db:

@@ -81,7 +81,7 @@ def main():
                                     'validation_interval_half_width_mw':round(q,1),
                                     'test_interval_coverage':round(coverage,3)}
         with open(out/f'h{h}.pkl','wb') as f:pickle.dump(model,f)
-    (out/'evaluation.json').write_text(json.dumps(report,indent=2))
-    print(json.dumps(report,indent=2))
+    (out/'evaluation.json').write_text(json.dumps(report, indent=2, default=float))
+    print(json.dumps(report, indent=2, default=float))
 
 if __name__=='__main__':main()

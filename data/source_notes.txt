@@ -1,0 +1,12 @@
+Source: ERCOT Hourly Load Data Archives
+Source URL: https://www.ercot.com/gridinfo/load/load_hist
+Original extracted file: Native_Load_2026.xlsx
+
+Downloaded: 2026-10-18 at 00:23 EDT (America/New_York, UTC−04:00)
+Equivalent UTC download time: 2026-10-18 at 04:23 UTC.
+
+Dataset timezone: Central Prevailing Time (America/Chicago; CST UTC−06:00 / CDT UTC−05:00).
+Timestamp column: Hour Ending.
+Coverage: January–September 2026.
+Data rows: 6,551.
+Demand column intended for the model: ERCOT (total system demand, MW).

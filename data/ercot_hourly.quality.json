@@ -1,0 +1,18 @@
+{
+  "source": "Native_Load_2026.xlsx",
+  "source_sha256": "a1a7320de8209371a8ce9df0a385eab8cae21dc8f609874882e8627be15ca6f7",
+  "source_url": "https://www.ercot.com/gridinfo/load/load_hist",
+  "source_timezone": "America/Chicago",
+  "timestamp_meaning": "interval end, UTC",
+  "source_rows": 6551,
+  "output_rows": 6551,
+  "first_timestamp": "2026-01-01T07:00:00+00:00",
+  "last_timestamp": "2026-10-01T05:00:00+00:00",
+  "missing_required_values": 0,
+  "duplicate_timestamps": 0,
+  "non_hourly_gaps": 0,
+  "invalid_demand_values": 0,
+  "rows_dropped_or_filled": 0,
+  "demand_min_mw": 39679.839039,
+  "demand_max_mw": 91133.727696
+}

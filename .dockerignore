@@ -1,8 +1,14 @@
 .git
 .env
+__pycache__
+*.pyc
+.ipynb_checkpoints
 data/*.sqlite3*
 data/raw
-data/vision
+data/vision_demo
 artifacts/demand
 artifacts/vision
-__pycache__
+notebooks
+slides
+tests
+docs

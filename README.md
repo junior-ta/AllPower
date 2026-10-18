@@ -1,46 +1,56 @@
 # AllPower
 
-AllPower is a LinuxONE research prototype for six-hour regional power-risk awareness and fictional hospital backup planning. The browser talks to a Python web API through an SSH tunnel. A separate worker claims SQLite jobs, calculates saved demand forecasts and scenario margins, and commits hospital backup plans and advisories. Both containers share `./data` and read the saved models in `./artifacts`.
+AllPower is a LinuxONE-hosted prototype for six-hour electricity demand and supply-risk planning. A Python worker creates a forecast and simulated supply scenario, saves the result in SQLite, and estimates backup coverage for a fictional hospital. The web app has two portals:
 
-## Portals
+- **Hospital:** six-hour outlook, backup plan, persistent alert acknowledgments, and an outage-preparation assistant.
+- **Power supplier:** regional outlook and a facility-inspection demo. The saved image model assesses a cropped glass insulator for a missing-cap defect; it does not determine whether an entire facility works.
 
-- `/` and `/hospital.html`: hospital outlook, backup coverage, acknowledgment and history, real southeast Texas map with a fictional marker, and a preparation assistant.
-- `/supplier.html`: total ERCOT outlook and illustrative facility inspection table. The first row runs fresh inference on a saved example insulator photo. The upload section accepts PNG/JPEG images under 2 MB.
-- `/vision-demo.html`: compatibility shortcut to supplier inspection.
+Each portal shows an expected operational view above a scroll-down simulation section. The facility records, hospital, supply figures, and local outage scenario are illustrative. The repository retains the ERCOT historical demand data, licensed InsPLAD image subset, trained models, and evaluation results as research evidence. Historical demand is **not** a live feed or a validated local-outage prediction. See [data and limitations](docs/DATA_AND_LIMITATIONS.md) for exact claims.
 
-Each portal shows its expected operational view first. Scroll down for labeled demo simulation controls. The hospital and supplier outlooks use the same saved run. Regional demand is total ERCOT; available supply and reserve are scenario assumptions. The hospital location and resources, local interruption, and supplier facility records are fictional. The trained image model assesses a cropped glass insulator for a missing-cap defect. It cannot certify that an entire facility is operational. Model scores are not calibrated failure probabilities.
+## Run the web app on LinuxONE
 
-The repo contains `data/ercot_hourly.csv`, saved evaluated demand candidates, and a trained `artifacts/vision/hog_logistic.pkl`. No training is required for this portal update. The worker uses the supplied demand CSV only when `ALLPOWER_DEMAND_CSV` is configured. Otherwise it uses synthetic history and saved synthetic ridge weights. Every completed run states its actual source, model, and input timestamp. Historical inputs must not be described as a current forecast.
+You need LinuxONE SSH access, Docker with the Compose plugin, and the ability to build from the LinuxONE base image in `Dockerfile`. The commands below run **on LinuxONE** unless labeled Windows.
 
-## Access and preparation assistant
+1. Clone the repository, or enter your existing checkout:
 
-Enter `ALLPOWER_TOKEN` in the inline field when configured. The browser keeps it in the current tab's session storage. Optional `ALLPOWER_HOSPITAL_TOKEN` and `ALLPOWER_SUPPLIER_TOKEN` restrict their respective portal APIs; the master token works on both. This is prototype access control, not production identity management.
+   ```bash
+   git clone https://github.com/junior-ta/AllPower.git
+   cd AllPower
+   ```
 
-The hospital assistant gets forecast and backup details from a saved run on the backend. It sends only a small structured summary and a bounded question to the configured text model. The default provider uses `GEMINI_API_KEY` and `gemini-3.5-flash-lite` through the LinuxONE web container. An optional local llama.cpp-compatible endpoint can be configured with `ALLPOWER_ADVICE_PROVIDER=llama` and `ALLPOWER_LLAMA_URL`. A model timeout, rate limit, missing key, or failure returns a deterministic demo preparation checklist from the saved run. The checklist is not hospital-approved. Keep patient information out of this prototype.
+   For an existing checkout, use `cd /path/to/AllPower` followed by `git pull origin main`. Keep your private `.env` and `data/allpower.sqlite3` when updating. Back up the database before your first deployment of a new version.
 
-## Run locally
+2. Configure the private environment file once:
 
-From the repository root in two terminals:
+   ```bash
+   cp .env.example .env
+   chmod 600 .env
+   nano .env
+   ```
 
-```bash
-python3 -m allpower.server --host 127.0.0.1 --port 8080
-python3 -m allpower.worker
-```
+   Replace `ALLPOWER_TOKEN=replace-with-a-random-token` with a token you choose. You will enter that token in the web page. For generated hospital advice, create a Gemini key in [Google AI Studio](https://aistudio.google.com/app/apikey) and set `GEMINI_API_KEY` in `.env`; without it, the app shows a prepared checklist. Do not commit `.env` or put either key in browser code. To use the bundled **historical** ERCOT demand CSV instead of synthetic history, set `ALLPOWER_DEMAND_CSV=/opt/allpower/data/ercot_hourly.csv` and `ALLPOWER_DEMAND_PROVENANCE=observed public data` after checking the input's provenance. The app labels each run's source.
 
-Open `http://127.0.0.1:8080`. With no access token configured, local API requests are permitted. Run tests with `python3 -m unittest discover -s tests -v`. Local image inference requires Pillow, NumPy, scikit-image, and scikit-learn in the web environment; the baseline API and fallback assistant use the standard library.
+3. Build and start the web app and worker:
 
-## Update LinuxONE
+   ```bash
+   docker compose up -d --build --force-recreate
+   docker compose ps
+   ```
 
-1. Back up `data/allpower.sqlite3` using a consistent SQLite backup operation. Keep `./data`, `./artifacts`, and the private `.env` on the VM.
-2. Pull the intended Git commit. Set `ALLPOWER_TOKEN` in the private `.env` and, if desired, `GEMINI_API_KEY`. See `.env.example`. Never commit keys or include them in the browser JavaScript.
-3. Run `docker compose up -d --build --force-recreate`. A pull alone does not update the running site because the image copies source files during build.
-4. Check `docker compose ps` and logs for both containers. Verify `GET /api/status` using the token header, then open the portal through an SSH tunnel. The Compose port binds to LinuxONE loopback.
-5. Run supply loss, acknowledge, refresh, and confirm the saved timestamp and history. Stop the worker, queue another job, refresh, restart the worker, and confirm the same job completes. Test the saved example and an uploaded image in supplier inspection.
+   Both `web` and `worker` should be running. The app listens on LinuxONE's loopback port **8080**. Compose mounts `./data` for the persistent SQLite database and `./artifacts` for saved models. A code update requires this rebuild; `git pull` alone does not change the running containers.
 
-On Windows, if local port 8080 is occupied, use `ssh -L 18080:127.0.0.1:8080 USER@VM_HOST` and browse `http://localhost:18080/`. The web container must be able to reach Gemini over HTTPS for generated explanations; the prepared checklist works without that connection. Set `ALLPOWER_DEMAND_CSV=/opt/allpower/data/ercot_hourly.csv` and `ALLPOWER_DEMAND_PROVENANCE=observed public data` only when the mounted CSV is the intended validated input. Supply, reserve, and hospital values remain simulated.
+4. On your **Windows PC**, open PowerShell and start an SSH tunnel. Leave this window open while using the site:
 
-## Records and recovery
+   ```powershell
+   ssh -L 18080:127.0.0.1:8080 YOUR_USERNAME@YOUR_LINUXONE_HOST
+   ```
 
-SQLite stores jobs, completed runs, advisories, acknowledgment timestamps, and advice messages. Schema additions use `CREATE TABLE IF NOT EXISTS` and preserve existing records. A result and advisory are committed together. A worker job has a lease and may be reclaimed after an interruption. Acknowledgment keeps its first timestamp when repeated. The browser restores the selected run, reads acknowledgment history from SQLite, and resumes pending-job polling after refresh. While the worker is offline, the web API can still show saved results and accept acknowledgment.
+   Use your existing SSH alias in place of `YOUR_USERNAME@YOUR_LINUXONE_HOST` if you have one. Open [http://localhost:18080/](http://localhost:18080/) for the hospital portal and [http://localhost:18080/supplier.html](http://localhost:18080/supplier.html) for the supplier portal. Enter your AllPower token in the page's token field. The old `/vision-demo.html` URL redirects to supplier inspection.
 
-See `docs/ARCHITECTURE.md`, `docs/DATA_AND_LIMITATIONS.md`, and `docs/DEMO_RUNBOOK.md` for the claim boundaries and demo sequence. The saved evaluation scores are research evidence, not a reliability claim for real outages or facility condition.
+To check a startup problem on LinuxONE, run `docker compose logs --tail=100 web worker`. To stop the app, run `docker compose down`; this does not delete the bind-mounted `./data` directory. If only the SSH tunnel closed, rerun step 4; the containers may still be running.
+
+## Repository contents
+
+`allpower/` contains the API, worker, forecasting, backup, image inference, and advice logic. `web/` contains the two portals. `data/` contains research inputs and the runtime SQLite database; `artifacts/` contains saved models and evaluations. `scripts/` and `notebooks/` preserve reproducible research steps; training is **not** needed to run the web app. `docs/` has the [architecture](docs/ARCHITECTURE.md), [data limits](docs/DATA_AND_LIMITATIONS.md), and [demo runbook](docs/DEMO_RUNBOOK.md).
+
+Run the code checks from the repository root with `python3 -m unittest discover -s tests -v`.
